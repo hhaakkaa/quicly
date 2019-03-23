@@ -2051,7 +2051,7 @@ static int commit_send_packet(quicly_conn_t *conn, struct st_quicly_send_context
         *s->dst++ = QUICLY_FRAME_TYPE_PADDING;
 
     /* the last packet of first-flight datagrams is padded to become 1280 bytes */
-    if (!coalesced && (s->target.packet->data.base[0] & QUICLY_PACKET_TYPE_BITMASK) == QUICLY_PACKET_TYPE_INITIAL &&
+    if (!coalesced && get_epoch(s->target.packet->data.base[0]) == QUICLY_PACKET_TYPE_INITIAL &&
         conn->super.state == QUICLY_STATE_FIRSTFLIGHT) {
         const size_t max_size = QUICLY_MAX_PACKET_SIZE - QUICLY_AEAD_TAG_SIZE;
         assert(quicly_is_client(conn));
