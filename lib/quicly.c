@@ -2808,7 +2808,7 @@ quicly_datagram_t *quicly_send_retry(quicly_context_t *ctx, struct sockaddr *sa,
     return packet;
 }
 
-static int send_handshake_flow(quicly_conn_t *conn, size_t epoch, struct st_quicly_send_context_t *s, int send_probe)
+static int send_handshake_flow(quicly_conn_t *conn, size_t epoch, struct st_quicly_send_context_t *s)
 {
     struct st_quicly_pn_space_t *ack_space = NULL;
     int ret = 0;
@@ -2843,14 +2843,6 @@ static int send_handshake_flow(quicly_conn_t *conn, size_t epoch, struct st_quic
         if ((ret = send_stream_data(stream, s)) != 0)
             goto Exit;
         resched_stream_data(stream);
-    }
-
-    /* send probe if requested */
-    if (send_probe && s->num_packets == 0 && s->target.packet == NULL) {
-        assert(quicly_is_client(conn));
-        if ((ret = allocate_frame(conn, s, 1)) != 0)
-            goto Exit;
-        *s->dst++ = QUICLY_FRAME_TYPE_PADDING;
     }
 
 Exit:
@@ -3071,10 +3063,9 @@ int quicly_send(quicly_conn_t *conn, quicly_datagram_t **packets, size_t *num_pa
     }
 
     /* send handshake flows */
-    if ((ret = send_handshake_flow(conn, QUICLY_EPOCH_INITIAL, &s,
-                                   conn->super.peer.address_validation.send_probe && conn->handshake == NULL)) != 0)
+    if ((ret = send_handshake_flow(conn, QUICLY_EPOCH_INITIAL, &s)) != 0)
         goto Exit;
-    if ((ret = send_handshake_flow(conn, QUICLY_EPOCH_HANDSHAKE, &s, conn->super.peer.address_validation.send_probe)) != 0)
+    if ((ret = send_handshake_flow(conn, QUICLY_EPOCH_HANDSHAKE, &s)) != 0)
         goto Exit;
 
     /* send encrypted frames */
@@ -3155,6 +3146,25 @@ int quicly_send(quicly_conn_t *conn, quicly_datagram_t **packets, size_t *num_pa
         }
         assert(conn->egress.last_retransmittable_sent_at == now);
     }
+
+#if 0
+    /* send probe if requested */
+    if (conn->super.peer.address_validation.send_probe && s.num_packets == 0) {
+        assert(quicly_is_client(conn));
+        if (conn->handshake != NULL) {
+            s.current.cipher = &conn->initial->cipher.egress;
+            s.current.first_byte = QUICLY_PACKET_TYPE_HANDSHAKE;
+        } else {
+            assert(conn->initial != NULL);
+            s.current.cipher = &conn->handshake->cipher.egress;
+            s.current.first_byte = QUICLY_PACKET_TYPE_INITIAL;
+        }
+        if ((ret = allocate_frame(conn, &s, 1)) != 0)
+            goto Exit;
+        *s.dst++ = QUICLY_FRAME_TYPE_PADDING;
+        commit_send_packet(conn, &s, 0);
+    }
+#endif
 
     ret = 0;
 Exit:
